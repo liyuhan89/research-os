@@ -92,6 +92,7 @@ export default function Cockpit() {
   const [graph, setGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null);
   const [report, setReport] = useState("");
   const [tab, setTab] = useState<Tab>("stream");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const suppressAbortRef = useRef(false);
   const [currentQuery, setCurrentQuery] = useState("");
@@ -112,6 +113,7 @@ export default function Cockpit() {
         const sess = list.find((s) => s.id === id);
         if (sess) setMessages(sess.messages ?? []);
       }
+      if (localStorage.getItem("researchos:sidebarCollapsed") === "1") setSidebarCollapsed(true);
     } catch {
       // 忽略损坏的存储
     }
@@ -342,12 +344,26 @@ export default function Cockpit() {
     }
   }
 
+  function toggleSidebar() {
+    setSidebarCollapsed((c) => {
+      const next = !c;
+      try {
+        localStorage.setItem("researchos:sidebarCollapsed", next ? "1" : "0");
+      } catch {
+        // 忽略
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="flex h-full w-full">
       <Sidebar
         sessions={sessions}
         currentSessionId={currentSessionId}
         running={running}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
         onNewResearch={handleNewResearch}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
