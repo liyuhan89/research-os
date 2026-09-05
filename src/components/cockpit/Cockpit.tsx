@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   Evidence,
   GraphEdge,
@@ -94,6 +94,27 @@ export default function Cockpit() {
   const suppressAbortRef = useRef(false);
   const [currentQuery, setCurrentQuery] = useState("");
   const [steering, setSteering] = useState<string | null>(null);
+  const hydratedRef = useRef(false);
+
+  // 历史会话持久化：挂载时恢复，变更时保存
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("researchos:messages");
+      if (saved) setMessages(JSON.parse(saved));
+    } catch {
+      // 忽略损坏的存储
+    }
+    hydratedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    try {
+      localStorage.setItem("researchos:messages", JSON.stringify(messages));
+    } catch {
+      // 存储不可用时忽略
+    }
+  }, [messages]);
 
   function resetResearch() {
     setPhase("");
