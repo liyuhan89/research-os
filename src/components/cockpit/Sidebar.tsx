@@ -3,20 +3,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui";
-import type { KnowledgeDoc } from "@/lib/types";
-
-const PROJECTS = ["RAG 技术综述", "大模型幻觉研究", "多智能体协作", "论文精读笔记"];
+import type { KnowledgeDoc, Session } from "@/lib/types";
 
 export default function Sidebar({
-  activeProject,
+  sessions,
+  currentSessionId,
   running,
   onNewResearch,
-  onSelectProject,
+  onSelectSession,
+  onDeleteSession,
 }: {
-  activeProject: string;
+  sessions: Session[];
+  currentSessionId: string | null;
   running: boolean;
   onNewResearch: () => void;
-  onSelectProject: (name: string) => void;
+  onSelectSession: (id: string) => void;
+  onDeleteSession: (id: string) => void;
 }) {
   const [status, setStatus] = useState<{ configured: boolean; model: string } | null>(null);
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
@@ -72,6 +74,8 @@ export default function Sidebar({
     await refreshDocs();
   }
 
+  const sortedSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+
   return (
     <aside className="flex w-[240px] shrink-0 flex-col border-r border-white/8 bg-white/[0.02]">
       {/* Logo */}
@@ -100,29 +104,51 @@ export default function Sidebar({
         </button>
       </div>
 
-      {/* 项目列表 */}
+      {/* 历史会话 */}
       <div className="mt-5 flex-1 overflow-y-auto px-4">
         <div className="px-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
-          研究项目
+          历史会话
         </div>
-        <ul className="mt-2 space-y-1">
-          {PROJECTS.map((p) => (
-            <li key={p}>
-              <button
-                onClick={() => onSelectProject(p)}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-slate-300 transition",
-                  p === activeProject
-                    ? "bg-white/8 text-slate-100"
-                    : "hover:bg-white/4 hover:text-slate-200",
-                )}
-              >
-                <span className="text-slate-500">📄</span>
-                <span className="truncate">{p}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        {sortedSessions.length > 0 ? (
+          <ul className="mt-2 space-y-1">
+            {sortedSessions.map((s) => (
+              <li key={s.id}>
+                <div
+                  className={cn(
+                    "group flex items-center rounded-lg",
+                    s.id === currentSessionId ? "bg-white/8" : "hover:bg-white/4",
+                  )}
+                >
+                  <button
+                    onClick={() => onSelectSession(s.id)}
+                    className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-[13px]"
+                  >
+                    <span className="shrink-0 text-slate-500">💬</span>
+                    <span
+                      className={cn(
+                        "truncate",
+                        s.id === currentSessionId ? "text-slate-100" : "text-slate-300",
+                      )}
+                    >
+                      {s.title}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => onDeleteSession(s.id)}
+                    title="删除会话"
+                    className="hidden shrink-0 px-2 text-slate-500 transition hover:text-rose-400 group-hover:block"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="mt-3 px-3 text-center text-[11px] text-slate-600">
+            还没有会话，点上方「新建研究」开始
+          </div>
+        )}
       </div>
 
       {/* 本地知识库 */}

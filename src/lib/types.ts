@@ -116,3 +116,12 @@ export interface UIMessage {
   role: "user" | "assistant";
   content: string;
 }
+
+/** 一个研究会话（历史记录） */
+export interface Session {
+  id: string;
+  title: string;
+  messages: UIMessage[];
+  updatedAt: number;
+  createdAt: number;
+}

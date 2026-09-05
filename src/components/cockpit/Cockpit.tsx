@@ -10,6 +10,7 @@ import type {
   PlanStep,
   ResearchEvent,
   ResearchGap,
+  Session,
   UIMessage,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,8 @@ async function readStream(
 }
 
 export default function Cockpit() {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState("");
@@ -89,32 +92,61 @@ export default function Cockpit() {
   const [graph, setGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null);
   const [report, setReport] = useState("");
   const [tab, setTab] = useState<Tab>("stream");
-  const [activeProject, setActiveProject] = useState("RAG 技术综述");
   const abortRef = useRef<AbortController | null>(null);
   const suppressAbortRef = useRef(false);
   const [currentQuery, setCurrentQuery] = useState("");
   const [steering, setSteering] = useState<string | null>(null);
   const hydratedRef = useRef(false);
 
-  // 历史会话持久化：挂载时恢复，变更时保存
+  // 会话历史：挂载时恢复
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("researchos:messages");
-      if (saved) setMessages(JSON.parse(saved));
+      const saved = localStorage.getItem("researchos:sessions");
+      const list: Session[] = saved ? JSON.parse(saved) : [];
+      const currentId = localStorage.getItem("researchos:currentSessionId");
+      setSessions(list);
+      const id =
+        currentId && list.some((s) => s.id === currentId) ? currentId : list[0]?.id ?? null;
+      setCurrentSessionId(id);
+      if (id) {
+        const sess = list.find((s) => s.id === id);
+        if (sess) setMessages(sess.messages ?? []);
+      }
     } catch {
       // 忽略损坏的存储
     }
     hydratedRef.current = true;
   }, []);
 
+  // 会话历史：变更时保存（标题取首个问题）
   useEffect(() => {
-    if (!hydratedRef.current) return;
-    try {
-      localStorage.setItem("researchos:messages", JSON.stringify(messages));
-    } catch {
-      // 存储不可用时忽略
-    }
-  }, [messages]);
+    if (!hydratedRef.current || !currentSessionId) return;
+    setSessions((prev) => {
+      const existing = prev.find((s) => s.id === currentSessionId);
+      const firstUser = messages.find((m) => m.role === "user")?.content ?? "";
+      const title =
+        existing && existing.title !== "新研究"
+          ? existing.title
+          : firstUser
+            ? firstUser.slice(0, 18)
+            : "新研究";
+      const updated = prev.some((s) => s.id === currentSessionId)
+        ? prev.map((s) =>
+            s.id === currentSessionId ? { ...s, messages, title, updatedAt: Date.now() } : s,
+          )
+        : [
+            { id: currentSessionId, title, messages, updatedAt: Date.now(), createdAt: Date.now() },
+            ...prev,
+          ];
+      try {
+        localStorage.setItem("researchos:sessions", JSON.stringify(updated));
+        localStorage.setItem("researchos:currentSessionId", currentSessionId);
+      } catch {
+        // 存储不可用时忽略
+      }
+      return updated;
+    });
+  }, [messages, currentSessionId]);
 
   function resetResearch() {
     setPhase("");
@@ -275,16 +307,50 @@ export default function Cockpit() {
   function handleNewResearch() {
     if (running) return;
     resetResearch();
+    const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setSessions((prev) => [
+      { id, title: "新研究", messages: [], updatedAt: Date.now(), createdAt: Date.now() },
+      ...prev,
+    ]);
+    setCurrentSessionId(id);
     setMessages([]);
+    setCurrentQuery("");
+    setSteering(null);
+  }
+
+  function handleSelectSession(id: string) {
+    if (id === currentSessionId || running) return;
+    const sess = sessions.find((s) => s.id === id);
+    if (!sess) return;
+    resetResearch();
+    setCurrentSessionId(id);
+    setMessages(sess.messages ?? []);
+    setCurrentQuery("");
+    setSteering(null);
+  }
+
+  function handleDeleteSession(id: string) {
+    const next = sessions.filter((s) => s.id !== id);
+    setSessions(next);
+    if (id === currentSessionId) {
+      const fallback = next[0];
+      setCurrentSessionId(fallback?.id ?? null);
+      setMessages(fallback?.messages ?? []);
+      resetResearch();
+      setCurrentQuery("");
+      setSteering(null);
+    }
   }
 
   return (
     <div className="flex h-full w-full">
       <Sidebar
-        activeProject={activeProject}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
         running={running}
         onNewResearch={handleNewResearch}
-        onSelectProject={setActiveProject}
+        onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
