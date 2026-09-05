@@ -1,0 +1,194 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas, monospace;
+}
+
+:root {
+  --background: #060913;
+  --foreground: #e6e9f4;
+  --accent-cyan: #22d3ee;
+  --accent-violet: #818cf8;
+  --accent-fuchsia: #c084fc;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: var(--foreground);
+  font-family:
+    system-ui,
+    -apple-system,
+    "PingFang SC",
+    "Microsoft YaHei",
+    "Segoe UI",
+    sans-serif;
+  background:
+    radial-gradient(1200px 800px at 15% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%, rgba(34, 211, 238, 0.12), transparent 55%),
+    radial-gradient(900px 900px at 50% 120%, rgba(192, 132, 252, 0.1), transparent 60%),
+    var(--background);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 玻璃拟态 ---------- */
+.glass {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.glass-strong {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.glass-hover {
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+.glass-hover:hover {
+  border-color: rgba(129, 140, 248, 0.4);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+}
+
+/* ---------- 渐变与发光 ---------- */
+.accent-gradient {
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet) 55%, var(--accent-fuchsia));
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #67e8f9, #a5b4fc 60%, #d8b4fe);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glow {
+  box-shadow: 0 0 44px -10px rgba(99, 102, 241, 0.55);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 32px -8px rgba(34, 211, 238, 0.5);
+}
+
+/* ---------- 动画 ---------- */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-fade-up {
+  animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+.animate-pulse-glow {
+  animation: pulseGlow 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: spin 1.2s linear infinite;
+}
+
+/* ---------- 滚动条 ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 140, 248, 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(129, 140, 248, 0.3);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- Markdown 报告排版 ---------- */
+.prose-report {
+  line-height: 1.75;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+.prose-report h1,
+.prose-report h2,
+.prose-report h3 {
+  color: #f1f5f9;
+  font-weight: 600;
+  margin: 1.1em 0 0.5em;
+  letter-spacing: -0.01em;
+}
+.prose-report h2 {
+  font-size: 1.15rem;
+}
+.prose-report h3 {
+  font-size: 1.02rem;
+}
+.prose-report p {
+  margin: 0.5em 0;
+}
+.prose-report ul,
+.prose-report ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+}
+.prose-report li {
+  margin: 0.25em 0;
+}
+.prose-report code {
+  background: rgba(129, 140, 248, 0.14);
+  color: #a5b4fc;
+  padding: 0.1em 0.4em;
+  border-radius: 6px;
+  font-size: 0.85em;
+}
+.prose-report strong {
+  color: #f8fafc;
+}
