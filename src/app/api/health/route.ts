@@ -7,10 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const key = process.env.DEEPSEEK_API_KEY;
-  // 只取「名称」，且只挑 DEEPSEEK / RAILWAY / NODE 相关，绝不返回任何值
-  const envNames = Object.keys(process.env)
-    .filter((k) => /^(DEEPSEEK|RAILWAY|NODE_ENV|NODE_VERSION)/i.test(k))
-    .sort();
+  const allEnvNames = Object.keys(process.env).sort();
 
   return Response.json({
     configured: isConfigured(),
@@ -18,9 +15,12 @@ export async function GET() {
     diag: {
       hasKey: Boolean(key),
       keyLen: key ? key.length : 0,
-      envCount: Object.keys(process.env).length,
-      envNames,
-      // 用于核对「变量到底加在哪个服务 / 哪个环境」
+      envCount: allEnvNames.length,
+      // 所有环境变量名（无值，绝不含密钥），用于核对哪些变量真的进了运行时
+      allEnvNames,
+      // 用于核对「变量到底加在哪个项目 / 服务 / 环境」
+      projectName: process.env.RAILWAY_PROJECT_NAME ?? null,
+      projectId: process.env.RAILWAY_PROJECT_ID ?? null,
       serviceName: process.env.RAILWAY_SERVICE_NAME ?? null,
       serviceId: process.env.RAILWAY_SERVICE_ID ?? null,
       environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? null,
