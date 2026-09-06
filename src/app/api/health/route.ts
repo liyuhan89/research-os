@@ -1,5 +1,5 @@
 // 健康检查：前端据此展示「真实模型 / Mock 模式」，不暴露任何密钥。
-// 附带 diag 诊断字段（只含变量名与长度，绝不含密钥值），用于排查部署环境。
+// 附带 diag 诊断字段（只含变量名/长度/Railway 标识，绝不含密钥值），用于排查部署环境。
 
 import { isConfigured, modelName } from "@/lib/llm";
 
@@ -20,6 +20,10 @@ export async function GET() {
       keyLen: key ? key.length : 0,
       envCount: Object.keys(process.env).length,
       envNames,
+      // 用于核对「变量到底加在哪个服务 / 哪个环境」
+      serviceName: process.env.RAILWAY_SERVICE_NAME ?? null,
+      serviceId: process.env.RAILWAY_SERVICE_ID ?? null,
+      environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? null,
     },
   });
 }
