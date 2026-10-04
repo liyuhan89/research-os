@@ -43,3 +43,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# competition submission exports (not part of the app source)
+/submission/
+/submission_docx/
+/submission_package/
+/submission_pdf/
+/*.zip
+/*.zip.*
+/*.pptx

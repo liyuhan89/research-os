@@ -1,8 +1,9 @@
-// 本地知识库 REST 接口：
+// 本地知识库 REST 接口（按用户隔离）：
 // GET    列出已入库文档
 // POST   上传并解析（multipart，字段名 "files"）
 // DELETE 清空或按 id 删除
 
+import { auth } from "@/auth";
 import {
   clearDocuments,
   ingestDocument,
@@ -14,11 +15,16 @@ import { parseFile } from "@/lib/parsers";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const docs = await listDocuments();
+  const userId = (await auth())?.user?.id;
+  if (!userId) return Response.json({ error: "未登录" }, { status: 401 });
+  const docs = await listDocuments(userId);
   return Response.json({ docs });
 }
 
 export async function POST(req: Request) {
+  const userId = (await auth())?.user?.id;
+  if (!userId) return Response.json({ error: "未登录" }, { status: 401 });
+
   let form: FormData;
   try {
     form = await req.formData();
@@ -46,7 +52,7 @@ export async function POST(req: Request) {
         results.push({ name: filename, ok: false, error: "未提取到文本内容" });
         continue;
       }
-      const doc = await ingestDocument(filename, filename, text, file.size);
+      const doc = await ingestDocument(userId, filename, filename, text, file.size);
       results.push({ name: filename, ok: true, doc: { id: doc.id, title: doc.title, chunks: doc.chunks } });
     } catch (error) {
       results.push({
@@ -61,11 +67,14 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const userId = (await auth())?.user?.id;
+  if (!userId) return Response.json({ error: "未登录" }, { status: 401 });
+
   const id = new URL(req.url).searchParams.get("id");
   if (id) {
-    await removeDocument(id);
+    await removeDocument(userId, id);
   } else {
-    await clearDocuments();
+    await clearDocuments(userId);
   }
   return Response.json({ ok: true });
 }

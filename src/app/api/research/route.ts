@@ -2,11 +2,15 @@
 // POST 不会被缓存；通过 ReadableStream 逐事件推送给前端。
 
 import { runResearch } from "@/agents/orchestrator";
+import { auth } from "@/auth";
 import type { ResearchRequest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const userId = (await auth())?.user?.id;
+  if (!userId) return Response.json({ error: "未登录" }, { status: 401 });
+
   let body: ResearchRequest;
   try {
     body = (await req.json()) as ResearchRequest;
@@ -28,7 +32,7 @@ export async function POST(req: Request) {
       };
 
       try {
-        for await (const event of runResearch(query, steering)) {
+        for await (const event of runResearch(query, steering, userId)) {
           send(event);
         }
       } catch (error) {

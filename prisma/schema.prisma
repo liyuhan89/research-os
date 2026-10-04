@@ -1,0 +1,45 @@
+// ResearchOS 数据模型：用户 + 研究会话 + 本地知识库（均按用户隔离）
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime          @default(now())
+  sessions     ResearchSession[]
+  documents    KnowledgeDoc[]
+}
+
+model ResearchSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  messages  Json // UIMessage[]
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([userId, updatedAt])
+}
+
+model KnowledgeDoc {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  source     String
+  chunks     Json // { index: number; text: string }[]
+  size       Int
+  ingestedAt DateTime @default(now())
+
+  @@index([userId])
+}

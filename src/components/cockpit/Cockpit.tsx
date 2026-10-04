@@ -65,7 +65,13 @@ async function readStream(
   }
 }
 
-export default function Cockpit() {
+export default function Cockpit({
+  initialTab = "stream",
+  initialSessionId,
+}: {
+  initialTab?: Tab;
+  initialSessionId?: string;
+}) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
@@ -91,63 +97,98 @@ export default function Cockpit() {
   >([]);
   const [graph, setGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null);
   const [report, setReport] = useState("");
-  const [tab, setTab] = useState<Tab>("stream");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const suppressAbortRef = useRef(false);
   const [currentQuery, setCurrentQuery] = useState("");
   const [steering, setSteering] = useState<string | null>(null);
   const hydratedRef = useRef(false);
+  const currentSessionIdRef = useRef<string | null>(null);
 
-  // 会话历史：挂载时恢复
+  // 同步 ref 与 state，让异步回调（如挂载时的 pending 启动）能读到最新会话 id
+  function syncCurrentSessionId(id: string | null) {
+    currentSessionIdRef.current = id;
+    setCurrentSessionId(id);
+  }
+
+  // 新建会话（本地生成 id，服务端按 id upsert）
+  function createSession(): string {
+    const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    syncCurrentSessionId(id);
+    setSessions((prev) => [
+      { id, title: "新研究", messages: [], updatedAt: Date.now(), createdAt: Date.now() },
+      ...prev,
+    ]);
+    return id;
+  }
+
+  // 挂载时：从服务端恢复当前用户的会话；消费首页跳转带入的问题
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("researchos:sessions");
-      const list: Session[] = saved ? JSON.parse(saved) : [];
-      const currentId = localStorage.getItem("researchos:currentSessionId");
-      setSessions(list);
-      const id =
-        currentId && list.some((s) => s.id === currentId) ? currentId : list[0]?.id ?? null;
-      setCurrentSessionId(id);
-      if (id) {
-        const sess = list.find((s) => s.id === id);
+    let cancelled = false;
+    (async () => {
+      let id: string | null = null;
+      try {
+        const res = await fetch("/api/sessions");
+        if (!res.ok) throw new Error();
+        const data = (await res.json()) as { sessions: Session[] };
+        if (cancelled) return;
+        const list = data.sessions ?? [];
+        setSessions(list);
+        id =
+          initialSessionId && list.some((s) => s.id === initialSessionId)
+            ? initialSessionId
+            : (list[0]?.id ?? null);
+        syncCurrentSessionId(id);
+        const sess = id ? list.find((s) => s.id === id) : undefined;
         if (sess) setMessages(sess.messages ?? []);
+      } catch {
+        // 未登录或网络失败：保持空态（proxy 已兜底重定向到登录页）
       }
       if (localStorage.getItem("researchos:sidebarCollapsed") === "1") setSidebarCollapsed(true);
-    } catch {
-      // 忽略损坏的存储
-    }
-    hydratedRef.current = true;
-  }, []);
+      // 从首页跳转带入的研究问题：消费一次后自动启动（移除即防 StrictMode 重复触发）
+      const pending = localStorage.getItem("researchos:pendingQuery");
+      if (pending) {
+        localStorage.removeItem("researchos:pendingQuery");
+        startResearch(pending);
+      }
+      hydratedRef.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSessionId]);
 
-  // 会话历史：变更时保存（标题取首个问题）
+  // 会话变更时：更新本地列表 + 持久化到服务端（防抖）
   useEffect(() => {
     if (!hydratedRef.current || !currentSessionId) return;
+    const firstUser = messages.find((m) => m.role === "user")?.content ?? "";
+    const title = firstUser ? firstUser.slice(0, 18) : "新研究";
+    const now = Date.now();
+
     setSessions((prev) => {
       const existing = prev.find((s) => s.id === currentSessionId);
-      const firstUser = messages.find((m) => m.role === "user")?.content ?? "";
-      const title =
-        existing && existing.title !== "新研究"
-          ? existing.title
-          : firstUser
-            ? firstUser.slice(0, 18)
-            : "新研究";
-      const updated = prev.some((s) => s.id === currentSessionId)
-        ? prev.map((s) =>
-            s.id === currentSessionId ? { ...s, messages, title, updatedAt: Date.now() } : s,
-          )
-        : [
-            { id: currentSessionId, title, messages, updatedAt: Date.now(), createdAt: Date.now() },
-            ...prev,
-          ];
-      try {
-        localStorage.setItem("researchos:sessions", JSON.stringify(updated));
-        localStorage.setItem("researchos:currentSessionId", currentSessionId);
-      } catch {
-        // 存储不可用时忽略
-      }
-      return updated;
+      const entry: Session = {
+        id: currentSessionId,
+        title,
+        messages,
+        updatedAt: now,
+        createdAt: existing?.createdAt ?? now,
+      };
+      return prev.some((s) => s.id === currentSessionId)
+        ? prev.map((s) => (s.id === currentSessionId ? entry : s))
+        : [entry, ...prev];
     });
+
+    const t = setTimeout(() => {
+      fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: currentSessionId, title, messages }),
+      }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
   }, [messages, currentSessionId]);
 
   function resetResearch() {
@@ -166,6 +207,7 @@ export default function Cockpit() {
   }
 
   async function startResearch(query: string, steeringInstr?: string) {
+    if (!currentSessionIdRef.current) createSession();
     setRunning(true);
     resetResearch();
     setTab("stream");
@@ -309,12 +351,7 @@ export default function Cockpit() {
   function handleNewResearch() {
     if (running) return;
     resetResearch();
-    const id = `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setSessions((prev) => [
-      { id, title: "新研究", messages: [], updatedAt: Date.now(), createdAt: Date.now() },
-      ...prev,
-    ]);
-    setCurrentSessionId(id);
+    createSession();
     setMessages([]);
     setCurrentQuery("");
     setSteering(null);
@@ -325,7 +362,7 @@ export default function Cockpit() {
     const sess = sessions.find((s) => s.id === id);
     if (!sess) return;
     resetResearch();
-    setCurrentSessionId(id);
+    syncCurrentSessionId(id);
     setMessages(sess.messages ?? []);
     setCurrentQuery("");
     setSteering(null);
@@ -334,9 +371,10 @@ export default function Cockpit() {
   function handleDeleteSession(id: string) {
     const next = sessions.filter((s) => s.id !== id);
     setSessions(next);
+    fetch(`/api/sessions?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
     if (id === currentSessionId) {
       const fallback = next[0];
-      setCurrentSessionId(fallback?.id ?? null);
+      syncCurrentSessionId(fallback?.id ?? null);
       setMessages(fallback?.messages ?? []);
       resetResearch();
       setCurrentQuery("");

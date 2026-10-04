@@ -134,6 +134,45 @@ body {
   animation: spin 1.2s linear infinite;
 }
 
+/* ---------- 轨道球动画（空状态 · 多 Agent 协作） ---------- */
+.orbit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.orbit-ring {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border: 1px solid rgba(129, 140, 248, 0.22);
+  border-radius: 9999px;
+  animation: orbit linear infinite;
+}
+.orbit-ring-1 {
+  animation-duration: 9s;
+}
+.orbit-ring-2 {
+  animation-duration: 16s;
+  animation-direction: reverse;
+}
+.orbit-ring-3 {
+  animation-duration: 24s;
+}
+.orbit-planet {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  box-shadow: 0 0 12px currentColor;
+}
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ---------- 滚动条 ---------- */
 * {
   scrollbar-width: thin;

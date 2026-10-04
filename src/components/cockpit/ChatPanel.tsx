@@ -59,8 +59,19 @@ export default function ChatPanel({
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5">
         {messages.length === 0 && !running && (
           <div className="flex h-full flex-col items-center justify-center text-center">
-            <div className="accent-gradient mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-2xl glow">
-              🧭
+            <div className="orbit mb-6 h-44 w-44">
+              <div className="accent-gradient relative z-10 flex h-14 w-14 items-center justify-center rounded-full text-2xl glow">
+                🧭
+              </div>
+              <div className="orbit-ring orbit-ring-1 h-28 w-28">
+                <span className="orbit-planet h-2.5 w-2.5 bg-cyan-300 text-cyan-300" />
+              </div>
+              <div className="orbit-ring orbit-ring-2 h-36 w-36">
+                <span className="orbit-planet h-2 w-2 bg-violet-400 text-violet-400" />
+              </div>
+              <div className="orbit-ring orbit-ring-3 h-44 w-44">
+                <span className="orbit-planet h-1.5 w-1.5 bg-fuchsia-400 text-fuchsia-400" />
+              </div>
             </div>
             <h2 className="text-lg font-semibold text-slate-100">
               让 AI 像资深研究员一样工作

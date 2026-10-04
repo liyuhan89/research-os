@@ -17,6 +17,7 @@ import type { ResearchEvent } from "@/lib/types";
 export async function* runResearch(
   query: string,
   steering?: string,
+  userId?: string,
 ): AsyncGenerator<ResearchEvent> {
   try {
     // 人机协同：中途插入的指令
@@ -78,8 +79,8 @@ export async function* runResearch(
       papers = mergePapers(papers, more);
       yield { type: "papers", papers };
     }
-    // 本地知识库检索
-    const localChunks = await searchLocal(query, 5);
+    // 本地知识库检索（按用户隔离）
+    const localChunks = await searchLocal(userId ?? "", query, 5);
     if (localChunks.length > 0) {
       yield { type: "local_hits", chunks: localChunks };
     }

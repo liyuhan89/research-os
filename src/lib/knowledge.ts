@@ -1,9 +1,9 @@
-// 本地知识库核心：文档切片 + 关键词倒排索引 + BM25 轻量检索。
-// 不依赖向量数据库/嵌入 API，文件持久化到 data/knowledge.json；
-// 可整体替换为 ChromaDB（向量检索）而不影响上层接口。
+// 本地知识库核心：文档切片 + 关键词倒排索引 + BM25 轻量检索（按用户隔离）。
+// 不依赖向量数据库/嵌入 API；文档与切片文本持久化到 PostgreSQL（KnowledgeDoc 表），
+// 运行时按 userId 缓存在内存 Map 中。检索逻辑（tokenize/chunkText/BM25）保持不变。
 
-import { promises as fs } from "fs";
-import path from "path";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import type { KnowledgeDoc, LocalChunk } from "@/lib/types";
 
 interface Chunk {
@@ -13,69 +13,96 @@ interface Chunk {
   text: string;
 }
 
-// 数据目录可配置：本地默认 <项目>/data，部署时可挂载持久卷（如 Railway Volume）并设置 DATA_DIR
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "knowledge.json");
-
-// ------- 内存态（运行时真相源） -------
-let docs: KnowledgeDoc[] = [];
-let chunks: Chunk[] = [];
-let chunkTokens: string[][] = []; // 与 chunks 平行
-let index: Map<string, number[]> = new Map(); // token -> chunk 下标
-let loaded = false;
-
-async function ensureLoaded(): Promise<void> {
-  if (loaded) return;
-  try {
-    const raw = await fs.readFile(DATA_FILE, "utf-8");
-    const parsed = JSON.parse(raw) as { docs?: KnowledgeDoc[]; chunks?: Chunk[] };
-    docs = parsed.docs ?? [];
-    chunks = parsed.chunks ?? [];
-  } catch {
-    docs = [];
-    chunks = [];
-  }
-  rebuildIndex();
-  loaded = true;
+interface StoredChunk {
+  index: number;
+  text: string;
 }
 
-function rebuildIndex(): void {
-  index = new Map();
-  chunkTokens = chunks.map((c) => tokenize(c.text));
-  chunkTokens.forEach((tokens, i) => {
+interface UserState {
+  docs: KnowledgeDoc[];
+  chunks: Chunk[];
+  chunkTokens: string[][]; // 与 chunks 平行
+  index: Map<string, number[]>; // token -> chunk 下标
+}
+
+// ------- 内存态（运行时真相源，按用户缓存） -------
+const states = new Map<string, UserState>();
+
+function emptyState(): UserState {
+  return { docs: [], chunks: [], chunkTokens: [], index: new Map() };
+}
+
+async function ensureLoaded(userId: string): Promise<UserState> {
+  const cached = states.get(userId);
+  if (cached) return cached;
+
+  const state = emptyState();
+  try {
+    const rows = await prisma.knowledgeDoc.findMany({
+      where: { userId },
+      orderBy: { ingestedAt: "desc" },
+    });
+    for (const row of rows) {
+      const stored = (row.chunks as unknown as StoredChunk[]) ?? [];
+      state.docs.push({
+        id: row.id,
+        title: row.title,
+        source: row.source,
+        chunks: stored.length,
+        size: row.size,
+        ingestedAt: row.ingestedAt.getTime(),
+      });
+      for (const c of stored) {
+        state.chunks.push({ docId: row.id, docTitle: row.title, index: c.index, text: c.text });
+      }
+    }
+  } catch {
+    // 数据库不可用（如本地未配置 DATABASE_URL）时保持空态，进程内仍可用
+  }
+  rebuildIndex(state);
+  states.set(userId, state);
+  return state;
+}
+
+function rebuildIndex(state: UserState): void {
+  state.index = new Map();
+  state.chunkTokens = state.chunks.map((c) => tokenize(c.text));
+  state.chunkTokens.forEach((tokens, i) => {
     for (const t of new Set(tokens)) {
-      const arr = index.get(t) ?? [];
+      const arr = state.index.get(t) ?? [];
       arr.push(i);
-      index.set(t, arr);
+      state.index.set(t, arr);
     }
   });
 }
 
-async function persist(): Promise<void> {
-  try {
-    await fs.mkdir(path.dirname(DATA_FILE), { recursive: true });
-    await fs.writeFile(DATA_FILE, JSON.stringify({ docs, chunks }, null, 2), "utf-8");
-  } catch {
-    // 只读文件系统（如 Vercel Serverless）时，保持内存态可用
-  }
-}
-
-// ------- 公开接口 -------
+// ------- 公开接口（首个参数均为 userId） -------
 
 export async function ingestDocument(
+  userId: string,
   title: string,
   source: string,
   text: string,
   size: number,
 ): Promise<KnowledgeDoc> {
-  await ensureLoaded();
+  const state = await ensureLoaded(userId);
 
   // 覆盖同名文档：先移除旧版本
-  docs = docs.filter((d) => d.title !== title);
-  chunks = chunks.filter((c) => c.docTitle !== title);
+  const existing = state.docs.find((d) => d.title === title);
+  if (existing) {
+    await prisma.knowledgeDoc.deleteMany({ where: { id: existing.id, userId } }).catch(() => {});
+    state.docs = state.docs.filter((d) => d.id !== existing.id);
+    state.chunks = state.chunks.filter((c) => c.docId !== existing.id);
+  }
 
   const id = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const docChunks = chunkText(text);
+  const stored: StoredChunk[] = docChunks.map((tc, i) => ({ index: i, text: tc }));
+
+  await prisma.knowledgeDoc
+    .create({ data: { id, userId, title, source, chunks: stored as unknown as Prisma.InputJsonValue, size } })
+    .catch(() => {});
+
   const doc: KnowledgeDoc = {
     id,
     title,
@@ -84,51 +111,49 @@ export async function ingestDocument(
     size,
     ingestedAt: Date.now(),
   };
-
-  docs.push(doc);
-  docChunks.forEach((tc, i) => chunks.push({ docId: id, docTitle: title, index: i, text: tc }));
-  rebuildIndex();
-  await persist();
+  state.docs.push(doc);
+  docChunks.forEach((tc, i) => state.chunks.push({ docId: id, docTitle: title, index: i, text: tc }));
+  rebuildIndex(state);
   return doc;
 }
 
-export async function listDocuments(): Promise<KnowledgeDoc[]> {
-  await ensureLoaded();
-  return [...docs].sort((a, b) => b.ingestedAt - a.ingestedAt);
+export async function listDocuments(userId: string): Promise<KnowledgeDoc[]> {
+  const state = await ensureLoaded(userId);
+  return [...state.docs].sort((a, b) => b.ingestedAt - a.ingestedAt);
 }
 
-export async function removeDocument(id: string): Promise<void> {
-  await ensureLoaded();
-  docs = docs.filter((d) => d.id !== id);
-  chunks = chunks.filter((c) => c.docId !== id);
-  rebuildIndex();
-  await persist();
+export async function removeDocument(userId: string, id: string): Promise<void> {
+  const state = await ensureLoaded(userId);
+  await prisma.knowledgeDoc.deleteMany({ where: { id, userId } }).catch(() => {});
+  state.docs = state.docs.filter((d) => d.id !== id);
+  state.chunks = state.chunks.filter((c) => c.docId !== id);
+  rebuildIndex(state);
 }
 
-export async function clearDocuments(): Promise<void> {
-  await ensureLoaded();
-  docs = [];
-  chunks = [];
-  chunkTokens = [];
-  index = new Map();
-  await persist();
+export async function clearDocuments(userId: string): Promise<void> {
+  const state = await ensureLoaded(userId);
+  await prisma.knowledgeDoc.deleteMany({ where: { userId } }).catch(() => {});
+  state.docs = [];
+  state.chunks = [];
+  state.chunkTokens = [];
+  state.index = new Map();
 }
 
-export async function searchLocal(query: string, topK = 5): Promise<LocalChunk[]> {
-  await ensureLoaded();
+export async function searchLocal(userId: string, query: string, topK = 5): Promise<LocalChunk[]> {
+  const state = await ensureLoaded(userId);
   const qTokens = new Set(tokenize(query));
-  if (qTokens.size === 0 || chunks.length === 0) return [];
+  if (qTokens.size === 0 || state.chunks.length === 0) return [];
 
   // 候选：命中的 chunk 下标
   const candidates = new Set<number>();
   for (const t of qTokens) {
-    for (const ci of index.get(t) ?? []) candidates.add(ci);
+    for (const ci of state.index.get(t) ?? []) candidates.add(ci);
   }
 
   const scored: { ci: number; score: number }[] = [];
   for (const ci of candidates) {
     const tf = new Map<string, number>();
-    for (const t of chunkTokens[ci]) tf.set(t, (tf.get(t) ?? 0) + 1);
+    for (const t of state.chunkTokens[ci]) tf.set(t, (tf.get(t) ?? 0) + 1);
     let score = 0;
     for (const qt of qTokens) score += tf.get(qt) ?? 0;
     if (score > 0) scored.push({ ci, score });
@@ -136,7 +161,7 @@ export async function searchLocal(query: string, topK = 5): Promise<LocalChunk[]
 
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, topK).map(({ ci, score }) => {
-    const c = chunks[ci];
+    const c = state.chunks[ci];
     return {
       docId: c.docId,
       docTitle: c.docTitle,
