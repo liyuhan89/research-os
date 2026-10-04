@@ -121,3 +121,14 @@ async function* mockStream(): AsyncGenerator<string> {
 export async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/** 从模型原始输出中提取 JSON 子串（优先数组，其次对象），供结构化输出 agent 复用 */
+export function extractJson(text: string): string {
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start >= 0 && end > start) return text.slice(start, end + 1);
+  const s2 = text.indexOf("{");
+  const e2 = text.lastIndexOf("}");
+  if (s2 >= 0 && e2 > s2) return text.slice(s2, e2 + 1);
+  return text;
+}

@@ -44,6 +44,26 @@ export interface ResearchGap {
   sources: string[]; // 依据的论文 id
 }
 
+/** 多文献对比表的一行（对比 Agent 按「方法/结论/局限」抽取） */
+export interface ComparisonRow {
+  paperId: string;
+  title: string;
+  year: number;
+  venue: string;
+  grade: Grade;
+  method: string;
+  conclusion: string;
+  limitation: string;
+}
+
+/** 术语溯源的词条（术语 Agent 从报告中抽取） */
+export interface TermEntry {
+  term: string;
+  origin: string;
+  development: string;
+  scholars: string;
+}
+
 /** 本地知识库文档元信息 */
 export interface KnowledgeDoc {
   id: string;
@@ -67,6 +87,8 @@ export interface GraphNode {
   id: string;
   label: string;
   group: "paper" | "concept";
+  /** 论文发表年份（仅 paper 节点，供时间轴过滤） */
+  year?: number;
 }
 
 export interface GraphEdge {
@@ -96,6 +118,8 @@ export type ResearchEvent =
   | { type: "tool_call"; name: string; args: Record<string, unknown>; result: string }
   | { type: "report_delta"; text: string }
   | { type: "graph"; nodes: GraphNode[]; edges: GraphEdge[] }
+  | { type: "comparison"; rows: ComparisonRow[] }
+  | { type: "terms"; terms: TermEntry[] }
   | { type: "done"; report: string }
   | { type: "error"; message: string };
 

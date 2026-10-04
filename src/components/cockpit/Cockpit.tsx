@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type {
+  ComparisonRow,
   Evidence,
   GraphEdge,
   GraphNode,
@@ -11,6 +12,7 @@ import type {
   ResearchEvent,
   ResearchGap,
   Session,
+  TermEntry,
   UIMessage,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -19,13 +21,17 @@ import ChatPanel from "@/components/cockpit/ChatPanel";
 import ThinkingStream from "@/components/cockpit/ThinkingStream";
 import KnowledgeGraph from "@/components/cockpit/KnowledgeGraph";
 import ReportView from "@/components/cockpit/ReportView";
+import ComparisonTable from "@/components/cockpit/ComparisonTable";
+import TermsPanel from "@/components/cockpit/TermsPanel";
 
-type Tab = "stream" | "graph" | "report";
+type Tab = "stream" | "graph" | "report" | "comparison" | "terms";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "stream", label: "思考流" },
   { key: "graph", label: "知识图谱" },
   { key: "report", label: "报告" },
+  { key: "comparison", label: "对比" },
+  { key: "terms", label: "术语" },
 ];
 
 let seq = 0;
@@ -97,6 +103,8 @@ export default function Cockpit({
   >([]);
   const [graph, setGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null);
   const [report, setReport] = useState("");
+  const [comparison, setComparison] = useState<ComparisonRow[]>([]);
+  const [terms, setTerms] = useState<TermEntry[]>([]);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -204,6 +212,8 @@ export default function Cockpit({
     setToolCalls([]);
     setGraph(null);
     setReport("");
+    setComparison([]);
+    setTerms([]);
   }
 
   async function startResearch(query: string, steeringInstr?: string) {
@@ -300,6 +310,12 @@ export default function Cockpit({
         break;
       case "gaps":
         setGaps(event.gaps);
+        break;
+      case "comparison":
+        setComparison(event.rows);
+        break;
+      case "terms":
+        setTerms(event.terms);
         break;
       case "relevance":
         setRelevance({
@@ -455,6 +471,8 @@ export default function Cockpit({
           )}
           {tab === "graph" && <KnowledgeGraph graph={graph} />}
           {tab === "report" && <ReportView report={report} running={running} />}
+          {tab === "comparison" && <ComparisonTable rows={comparison} running={running} />}
+          {tab === "terms" && <TermsPanel terms={terms} running={running} />}
         </div>
       </aside>
     </div>

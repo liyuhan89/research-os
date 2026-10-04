@@ -7,6 +7,7 @@ interface SimNode {
   id: string;
   label: string;
   group: "paper" | "concept";
+  year?: number;
   x: number;
   y: number;
   vx: number;
@@ -28,6 +29,7 @@ export default function KnowledgeGraph({
   const draggingRef = useRef<string | null>(null);
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [ready, setReady] = useState(false);
+  const [year, setYear] = useState<number | null>(null);
 
   useEffect(() => {
     if (!graph || graph.nodes.length === 0) {
@@ -42,6 +44,7 @@ export default function KnowledgeGraph({
         id: n.id,
         label: n.label,
         group: n.group,
+        year: n.year,
         x: W / 2 + Math.cos(angle) * r,
         y: H / 2 + Math.sin(angle) * r,
         vx: 0,
@@ -139,6 +142,18 @@ export default function KnowledgeGraph({
     return () => cancelAnimationFrame(raf);
   }, [graph]);
 
+  // 时间轴：图谱加载后，把滑块定位到论文最大年份
+  useEffect(() => {
+    if (!graph) {
+      setYear(null);
+      return;
+    }
+    const ys = graph.nodes
+      .filter((n) => n.group === "paper" && n.year)
+      .map((n) => n.year as number);
+    setYear(ys.length ? Math.max(...ys) : null);
+  }, [graph]);
+
   function toSvgPoint(clientX: number, clientY: number) {
     const svg = svgRef.current;
     if (!svg) return { x: clientX, y: clientY };
@@ -178,6 +193,22 @@ export default function KnowledgeGraph({
     draggingRef.current = null;
   }
 
+  const paperYears = (graph?.nodes ?? [])
+    .filter((n) => n.group === "paper" && n.year)
+    .map((n) => n.year as number);
+  const minYear = paperYears.length ? Math.min(...paperYears) : 0;
+  const maxYear = paperYears.length ? Math.max(...paperYears) : 0;
+  const activeYear = year ?? maxYear;
+  const visibleIds = new Set(
+    (graph?.nodes ?? [])
+      .filter((n) => n.group === "concept" || (n.year ?? 0) <= activeYear)
+      .map((n) => n.id),
+  );
+  const visibleEdges = (graph?.edges ?? []).filter(
+    (e) => visibleIds.has(e.source) && visibleIds.has(e.target),
+  );
+  const visibleNodes = (graph?.nodes ?? []).filter((n) => visibleIds.has(n.id));
+
   if (!ready || !graph) {
     return (
       <div className="flex h-full flex-col overflow-y-auto p-4">
@@ -188,6 +219,27 @@ export default function KnowledgeGraph({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4">
+      {minYear !== maxYear && (
+        <div className="mb-3">
+          <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
+            <span>时间轴</span>
+            <span className="text-slate-300">{activeYear}</span>
+          </div>
+          <input
+            type="range"
+            min={minYear}
+            max={maxYear}
+            step={1}
+            value={activeYear}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="w-full accent-violet-400"
+          />
+          <div className="mt-0.5 flex justify-between text-[10px] text-slate-600">
+            <span>{minYear}</span>
+            <span>{maxYear}</span>
+          </div>
+        </div>
+      )}
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
@@ -196,7 +248,7 @@ export default function KnowledgeGraph({
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
       >
-        {graph.edges.map((e, i) => {
+        {visibleEdges.map((e, i) => {
           const s = positions[e.source];
           const t = positions[e.target];
           if (!s || !t) return null;
@@ -212,7 +264,7 @@ export default function KnowledgeGraph({
             />
           );
         })}
-        {graph.nodes.map((n) => {
+        {visibleNodes.map((n) => {
           const p = positions[n.id];
           if (!p) return null;
           const isPaper = n.group === "paper";

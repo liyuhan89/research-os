@@ -70,7 +70,7 @@ export const SAMPLE_PAPERS: Paper[] = [
 export function buildMockGraph(papers: Paper[]) {
   const concepts = ["Retrieval-Augmented Generation", "Self-Reflection", "Corrective Retrieval", "Long Context"];
   const nodes = [
-    ...papers.map((p) => ({ id: p.id, label: shortTitle(p.title), group: "paper" as const })),
+    ...papers.map((p) => ({ id: p.id, label: shortTitle(p.title), group: "paper" as const, year: p.year })),
     ...concepts.map((c, i) => ({ id: `c-${i}`, label: c, group: "concept" as const })),
   ];
   const edges = papers.map((p, i) => ({

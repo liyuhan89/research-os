@@ -6,6 +6,8 @@ import { search } from "@/agents/searcher";
 import { evaluateRelevance, MAX_RETRIES, mergePapers, rewriteQuery } from "@/agents/retrieval";
 import { read } from "@/agents/reader";
 import { critique } from "@/agents/critic";
+import { compare } from "@/agents/comparator";
+import { extractTerms } from "@/agents/terms";
 import { mineGaps } from "@/agents/gaps";
 import { write } from "@/agents/writer";
 import { buildMockGraph } from "@/lib/mock";
@@ -106,6 +108,11 @@ export async function* runResearch(
     if (controversy) yield { type: "controversy", message: controversy };
     yield { type: "step", stepId: "step-3", status: "done", detail: "证据分级完成" };
 
+    // 对比表：多文献按「方法/结论/局限」维度结构化对比
+    yield { type: "phase", phase: "critiquing", message: "📊 对比 Agent 正在生成多文献对比表…" };
+    const rows = await compare(papers, notes, evidence);
+    yield { type: "comparison", rows };
+
     // 研究空白挖掘（原创杀手锏）：汇总 Limitations，推断未来方向
     yield { type: "phase", phase: "critiquing", message: "🔬 研究空白挖掘：汇总 Limitations 并推断未来方向…" };
     const gaps = await mineGaps(papers);
@@ -124,6 +131,11 @@ export async function* runResearch(
       yield { type: "report_delta", text: delta };
     }
     yield { type: "step", stepId: "step-4", status: "done", detail: "报告生成完成" };
+
+    // 术语溯源：从报告抽取关键术语（起源/发展/学者观点）
+    yield { type: "phase", phase: "writing", message: "🏷️ 术语 Agent 正在抽取关键术语…" };
+    const terms = await extractTerms(report);
+    yield { type: "terms", terms };
 
     yield { type: "phase", phase: "done", message: "✅ 研究完成" };
     yield { type: "done", report };
