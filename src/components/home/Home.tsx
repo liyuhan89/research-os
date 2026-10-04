@@ -97,8 +97,8 @@ export default function Home() {
           让 AI 像资深研究员一样工作
         </h1>
         <p className="mt-3 max-w-xl text-base leading-relaxed text-white/70">
-          五个协作的 AI Agent 自主完成「规划 → 检索 → 阅读 → 评审 → 撰写」，
-          实时可视化思考过程，生成带权威引用的综述报告。
+          十个协作的 AI Agent 自主完成「规划 → 检索 → CRAG 修正 → 阅读 → 评审 → 对比 → 空白挖掘 → 撰写 → 术语」，
+          编排 Agent 统一调度全程；实时可视化思考过程，生成带权威引用的综述报告。
         </p>
 
         {/* 主卡片（通栏） */}
